@@ -37,16 +37,20 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options (simplified) ----------
+# ---------- YDL options (android client = fast, no JS) ----------
 YDL_OPTIONS = {
     'format': 'bestaudio',
-    'quiet': False,
+    'quiet': True,                        # reduce log spam
     'nocheckcertificate': True,
     'ignoreerrors': False,
-    'logtostderr': True,
     'extract_flat': False,
     'playlistend': 1,
-    'compat_opts': ['allow-unsafe-extractors'],
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android'], # fast, doesn't require JS
+            'skip': ['dash', 'webpage'],
+        }
+    },
 }
 if cookies_file:
     YDL_OPTIONS['cookiefile'] = cookies_file.name
@@ -65,7 +69,6 @@ class Track:
         self.requester = requester
 
 def get_voice_client(guild_id):
-    """Find voice client for a guild ID."""
     for vc in bot.voice_clients:
         if vc.guild.id == guild_id:
             return vc
@@ -79,15 +82,19 @@ async def play_next(guild_id):
     if not voice_client:
         return
     try:
-        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-            info = ydl.extract_info(track.url, download=False)
-            if 'url' in info:
-                url = info['url']
-            elif 'formats' in info and len(info['formats']) > 0:
-                best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
-                url = best['url']
-            else:
-                raise Exception("No playable URL found")
+        # Run extraction in a thread to avoid blocking the event loop
+        def extract():
+            with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+                info = ydl.extract_info(track.url, download=False)
+                return info
+        info = await asyncio.to_thread(extract)
+        if 'url' in info:
+            url = info['url']
+        elif 'formats' in info and len(info['formats']) > 0:
+            best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
+            url = best['url']
+        else:
+            raise Exception("No playable URL found")
     except Exception as e:
         await voice_client.channel.send(f"❌ Playback error: {str(e)[:300]}")
         await play_next(guild_id)
@@ -113,28 +120,27 @@ async def play(ctx, *, query=None):
         await ctx.author.voice.channel.connect()
         voice_client = ctx.voice_client
 
-    # Fix for YouTube mix links – strip the &list= part
+    # Strip `&list=` from YouTube links
     if 'youtube.com/watch' in query and 'list=' in query:
         video_id = re.search(r'v=([^&]+)', query)
         if video_id:
             query = f"https://www.youtube.com/watch?v={video_id.group(1)}"
 
     try:
-        if query.startswith(('http://', 'https://')):
-            url = query
+        def search():
             with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-                info = ydl.extract_info(url, download=False)
-                if 'entries' in info:
-                    info = info['entries'][0]
-                title = info.get('title', 'Unknown')
-        else:
-            with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-                info = ydl.extract_info(f"ytsearch:{query}", download=False)
-                if not info or 'entries' not in info or not info['entries']:
-                    raise Exception("No results found")
-                entry = info['entries'][0]
-                title = entry['title']
-                url = entry['webpage_url']
+                if query.startswith(('http://', 'https://')):
+                    info = ydl.extract_info(query, download=False)
+                    if 'entries' in info:
+                        info = info['entries'][0]
+                    return info.get('title', 'Unknown'), query
+                else:
+                    info = ydl.extract_info(f"ytsearch:{query}", download=False)
+                    if not info or 'entries' not in info or not info['entries']:
+                        raise Exception("No results found")
+                    entry = info['entries'][0]
+                    return entry['title'], entry['webpage_url']
+        title, url = await asyncio.to_thread(search)
     except Exception as e:
         await ctx.send(f"❌ Search error: {str(e)[:300]}")
         return
