@@ -37,17 +37,17 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options (android client = fast, no JS) ----------
+# ---------- YDL options (web client + cookies) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio',
-    'quiet': True,                        # reduce log spam
+    'format': 'bestaudio[ext=webm]/bestaudio',   # reliable format
+    'quiet': True,                               # less spam
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'extract_flat': False,
     'playlistend': 1,
     'extractor_args': {
         'youtube': {
-            'player_client': ['android'], # fast, doesn't require JS
+            'player_client': ['web'],            # web works with cookies
             'skip': ['dash', 'webpage'],
         }
     },
@@ -82,7 +82,7 @@ async def play_next(guild_id):
     if not voice_client:
         return
     try:
-        # Run extraction in a thread to avoid blocking the event loop
+        # Extract in thread to avoid blocking
         def extract():
             with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
                 info = ydl.extract_info(track.url, download=False)
