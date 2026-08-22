@@ -65,7 +65,6 @@ async def play(ctx, *, query=None):
     if not voice_client:
         await ctx.author.voice.channel.connect()
         voice_client = ctx.voice_client
-    # Search or link
     if query.startswith(('http://', 'https://')):
         url = query
         with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
@@ -108,4 +107,10 @@ async def leave(ctx):
         queues[ctx.guild.id] = []
         await ctx.send("Left")
 
-bot.run("YOUR_BOT_TOKEN")   # <-- Replace this with your token
+# ---------- THIS READS THE TOKEN FROM RENDER'S SECRET SETTINGS ----------
+TOKEN = os.getenv('DISCORD_TOKEN')
+if TOKEN is None:
+    print("ERROR: DISCORD_TOKEN not set in environment variables!")
+    exit(1)
+
+bot.run(TOKEN)
