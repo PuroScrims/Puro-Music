@@ -18,10 +18,9 @@ def ping():
 def run_flask():
     app.run(host='0.0.0.0', port=8080, debug=False, use_reloader=False)
 
-# Start Flask in a non-daemon thread and give it time to bind
 flask_thread = threading.Thread(target=run_flask, daemon=False)
 flask_thread.start()
-time.sleep(2)  # ensure the port is open
+time.sleep(2)
 
 # ---------- Bot ----------
 bot = commands.Bot(command_prefix='m!', intents=discord.Intents.all())
@@ -38,21 +37,15 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options ----------
+# ---------- YDL options (simplified) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio/best',
+    'format': 'bestaudio',
     'quiet': False,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': True,
     'extract_flat': False,
     'playlistend': 1,
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['web'],
-            'skip': ['dash', 'webpage'],
-        }
-    },
     'compat_opts': ['allow-unsafe-extractors'],
 }
 if cookies_file:
@@ -71,11 +64,18 @@ class Track:
         self.url = url
         self.requester = requester
 
+def get_voice_client(guild_id):
+    """Find voice client for a guild ID."""
+    for vc in bot.voice_clients:
+        if vc.guild.id == guild_id:
+            return vc
+    return None
+
 async def play_next(guild_id):
     if guild_id not in queues or not queues[guild_id]:
         return
     track = queues[guild_id].pop(0)
-    voice_client = bot.voice_clients.get(guild_id)
+    voice_client = get_voice_client(guild_id)
     if not voice_client:
         return
     try:
