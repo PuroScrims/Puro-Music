@@ -6,6 +6,10 @@ import os
 import tempfile
 from flask import Flask
 import threading
+import logging
+
+# Enable detailed yt-dlp logging
+yt_dlp.utils.logging.getLogger().setLevel(logging.DEBUG)
 
 # ---------- Keep-alive ----------
 app = Flask(__name__)
@@ -31,14 +35,15 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options ----------
+# ---------- YDL options with debugging ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio',
-    'quiet': False,             # set to True later, but False for debugging
+    'format': 'bestaudio',          # simplest
+    'quiet': False,                 # show everything
     'nocheckcertificate': True,
     'ignoreerrors': False,
-    'logtostderr': False,
+    'logtostderr': True,
     'extract_flat': False,
+    'verbose': True,                # extra details
 }
 if cookies_file:
     YDL_OPTIONS['cookiefile'] = cookies_file.name
@@ -67,10 +72,17 @@ async def play_next(guild_id):
         with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
             info = ydl.extract_info(track.url, download=False)
             if 'url' not in info:
-                raise Exception("No direct URL found")
-            url = info['url']
+                # Sometimes the URL is in 'formats' - pick first best
+                if 'formats' in info and len(info['formats']) > 0:
+                    # pick the one with best audio bitrate
+                    best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
+                    url = best['url']
+                else:
+                    raise Exception("No direct URL or formats found")
+            else:
+                url = info['url']
     except Exception as e:
-        await voice_client.channel.send(f"❌ Error: {str(e)[:200]}")
+        await voice_client.channel.send(f"❌ Playback error: {str(e)[:300]}")
         await play_next(guild_id)
         return
     source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
@@ -109,7 +121,7 @@ async def play(ctx, *, query=None):
                 title = entry['title']
                 url = entry['webpage_url']
     except Exception as e:
-        await ctx.send(f"❌ Search error: {str(e)[:200]}")
+        await ctx.send(f"❌ Search error: {str(e)[:300]}")
         return
 
     track = Track(title, url, ctx.author)
