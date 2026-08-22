@@ -32,21 +32,23 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options (FIXED) ----------
+# ---------- YDL options (with Deno support) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio/best',          # broad format selection
+    'format': 'bestaudio/best',
     'quiet': False,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': True,
     'extract_flat': False,
-    'playlistend': 1,                    # only first video
+    'playlistend': 1,
     'extractor_args': {
         'youtube': {
-            'player_client': ['web'],    # 'web' works with cookies
+            'player_client': ['web'],
             'skip': ['dash', 'webpage'],
         }
-    }
+    },
+    # Tell yt-dlp to use Deno (it's enabled by default, but this ensures it)
+    'compat_opts': ['allow-unsafe-extractors'],
 }
 if cookies_file:
     YDL_OPTIONS['cookiefile'] = cookies_file.name
@@ -77,7 +79,6 @@ async def play_next(guild_id):
             if 'url' in info:
                 url = info['url']
             elif 'formats' in info and len(info['formats']) > 0:
-                # pick best audio (by bitrate)
                 best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
                 url = best['url']
             else:
@@ -118,7 +119,6 @@ async def play(ctx, *, query=None):
             url = query
             with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
                 info = ydl.extract_info(url, download=False)
-                # If it's a playlist, take the first entry
                 if 'entries' in info:
                     info = info['entries'][0]
                 title = info.get('title', 'Unknown')
