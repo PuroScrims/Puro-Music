@@ -37,17 +37,17 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options (web client + cookies) ----------
+# ---------- YDL options (permissive format) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio[ext=webm]/bestaudio',   # reliable format
-    'quiet': True,                               # less spam
+    'format': 'bestaudio',                # let yt-dlp decide the container
+    'quiet': True,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'extract_flat': False,
     'playlistend': 1,
     'extractor_args': {
         'youtube': {
-            'player_client': ['web'],            # web works with cookies
+            'player_client': ['web'],     # works with cookies
             'skip': ['dash', 'webpage'],
         }
     },
@@ -82,7 +82,6 @@ async def play_next(guild_id):
     if not voice_client:
         return
     try:
-        # Extract in thread to avoid blocking
         def extract():
             with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
                 info = ydl.extract_info(track.url, download=False)
@@ -91,6 +90,7 @@ async def play_next(guild_id):
         if 'url' in info:
             url = info['url']
         elif 'formats' in info and len(info['formats']) > 0:
+            # pick the format with the highest audio bitrate
             best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
             url = best['url']
         else:
