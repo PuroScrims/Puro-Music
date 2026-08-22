@@ -31,10 +31,15 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ COOKIES_CONTENT not set – YouTube may block requests.")
 
-# ---------- YDL OPTIONS (fixed format) ----------
+# ---------- YDL OPTIONS (force web client + bestaudio) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio',          # simpler, works with cookies
+    'format': 'bestaudio',
     'quiet': True,
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['web'],   # uses JavaScript solver (Node.js required)
+        }
+    }
 }
 if cookies_file:
     YDL_OPTIONS['cookiefile'] = cookies_file.name
