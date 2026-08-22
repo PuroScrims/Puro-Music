@@ -31,13 +31,14 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ COOKIES_CONTENT not set – YouTube may block requests.")
 
-# ---------- YDL OPTIONS (force web client + bestaudio) ----------
+# ---------- YDL OPTIONS (no JavaScript needed with ios) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio',
+    'format': 'bestaudio[ext=webm]/bestaudio',
     'quiet': True,
     'extractor_args': {
         'youtube': {
-            'player_client': ['web'],   # uses JavaScript solver (Node.js required)
+            'player_client': ['ios'],          # ios client works without signature solving
+            'skip': ['webpage', 'dash'],
         }
     }
 }
