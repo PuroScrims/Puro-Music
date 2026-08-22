@@ -8,7 +8,7 @@ from flask import Flask
 import threading
 import re
 
-# ---------- Keep-alive ----------
+# ---------- Keep-alive web server ----------
 app = Flask(__name__)
 @app.route('/')
 def ping():
@@ -32,18 +32,18 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options ----------
+# ---------- YDL options (FIXED) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio[ext=webm]/bestaudio',
+    'format': 'bestaudio/best',          # broad format selection
     'quiet': False,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': True,
     'extract_flat': False,
-    'playlistend': 1,                # only the first video
+    'playlistend': 1,                    # only first video
     'extractor_args': {
         'youtube': {
-            'player_client': ['android', 'ios'],  # fallback clients
+            'player_client': ['web'],    # 'web' works with cookies
             'skip': ['dash', 'webpage'],
         }
     }
@@ -107,20 +107,18 @@ async def play(ctx, *, query=None):
         await ctx.author.voice.channel.connect()
         voice_client = ctx.voice_client
 
-    # If it's a YouTube link with 'list=' – strip the list parameter
+    # Fix for YouTube mix links – strip the &list= part
     if 'youtube.com/watch' in query and 'list=' in query:
-        # Extract video ID
         video_id = re.search(r'v=([^&]+)', query)
         if video_id:
-            clean_url = f"https://www.youtube.com/watch?v={video_id.group(1)}"
-            query = clean_url
+            query = f"https://www.youtube.com/watch?v={video_id.group(1)}"
 
     try:
         if query.startswith(('http://', 'https://')):
             url = query
             with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
                 info = ydl.extract_info(url, download=False)
-                # If it's a playlist, we only take the first entry
+                # If it's a playlist, take the first entry
                 if 'entries' in info:
                     info = info['entries'][0]
                 title = info.get('title', 'Unknown')
@@ -173,4 +171,5 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 if not TOKEN:
     print("ERROR: DISCORD_TOKEN not set")
     exit(1)
+
 bot.run(TOKEN)
