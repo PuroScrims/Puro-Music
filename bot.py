@@ -19,17 +19,33 @@ threading.Thread(target=run, daemon=True).start()
 # ---------- Bot ----------
 bot = commands.Bot(command_prefix='m!', intents=discord.Intents.all())
 
-# ---------- FIXED YDL OPTIONS (bypass YouTube bot block) ----------
+# ---------- Load cookies from environment ----------
+COOKIES_CONTENT = os.getenv('COOKIES_CONTENT')
+cookies_file = None
+if COOKIES_CONTENT:
+    # Write the cookie content to a temporary file
+    cookies_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt')
+    cookies_file.write(COOKIES_CONTENT)
+    cookies_file.flush()
+    cookies_file.close()
+    print("✅ Cookies loaded from environment.")
+else:
+    print("⚠️ COOKIES_CONTENT not set – YouTube may block requests.")
+
+# ---------- YDL OPTIONS (with cookie file if available) ----------
 YDL_OPTIONS = {
     'format': 'bestaudio/best',
     'quiet': True,
     'extractor_args': {
         'youtube': {
-            'player_client': ['android', 'web'],
+            'player_client': ['android', 'ios'],
             'skip': ['webpage', 'dash'],
         }
     }
 }
+if cookies_file:
+    YDL_OPTIONS['cookiefile'] = cookies_file.name
+    print(f"📁 Cookie file path: {cookies_file.name}")
 
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1', 'options': '-vn'}
 
@@ -118,7 +134,7 @@ async def leave(ctx):
         queues[ctx.guild.id] = []
         await ctx.send("Left")
 
-# ---------- READ TOKEN FROM RENDER ENVIRONMENT ----------
+# ---------- READ DISCORD TOKEN ----------
 TOKEN = os.getenv('DISCORD_TOKEN')
 if TOKEN is None:
     print("ERROR: DISCORD_TOKEN not set in environment variables!")
