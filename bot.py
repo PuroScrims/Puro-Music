@@ -31,14 +31,20 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options (with fallback formats) ----------
+# ---------- YDL options (ios client – no JS needed) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio[ext=webm]/bestaudio',
+    'format': 'bestaudio',
     'quiet': False,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': True,
     'extract_flat': False,
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['ios'],   # bypasses JavaScript requirement
+            'skip': ['dash', 'webpage'],
+        }
+    }
 }
 if cookies_file:
     YDL_OPTIONS['cookiefile'] = cookies_file.name
@@ -69,7 +75,7 @@ async def play_next(guild_id):
             if 'url' in info:
                 url = info['url']
             elif 'formats' in info and len(info['formats']) > 0:
-                # pick best audio format
+                # pick the format with the highest audio bitrate
                 best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
                 url = best['url']
             else:
