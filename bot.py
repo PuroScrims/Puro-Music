@@ -6,6 +6,7 @@ import os
 import tempfile
 from flask import Flask
 import threading
+import re
 
 # ---------- Keep-alive ----------
 app = Flask(__name__)
@@ -31,17 +32,18 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options (ios client – no JS needed) ----------
+# ---------- YDL options ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio',
+    'format': 'bestaudio[ext=webm]/bestaudio',
     'quiet': False,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': True,
     'extract_flat': False,
+    'playlistend': 1,                # only the first video
     'extractor_args': {
         'youtube': {
-            'player_client': ['ios'],   # bypasses JavaScript requirement
+            'player_client': ['android', 'ios'],  # fallback clients
             'skip': ['dash', 'webpage'],
         }
     }
@@ -75,7 +77,7 @@ async def play_next(guild_id):
             if 'url' in info:
                 url = info['url']
             elif 'formats' in info and len(info['formats']) > 0:
-                # pick the format with the highest audio bitrate
+                # pick best audio (by bitrate)
                 best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
                 url = best['url']
             else:
@@ -105,11 +107,22 @@ async def play(ctx, *, query=None):
         await ctx.author.voice.channel.connect()
         voice_client = ctx.voice_client
 
+    # If it's a YouTube link with 'list=' – strip the list parameter
+    if 'youtube.com/watch' in query and 'list=' in query:
+        # Extract video ID
+        video_id = re.search(r'v=([^&]+)', query)
+        if video_id:
+            clean_url = f"https://www.youtube.com/watch?v={video_id.group(1)}"
+            query = clean_url
+
     try:
         if query.startswith(('http://', 'https://')):
             url = query
             with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
                 info = ydl.extract_info(url, download=False)
+                # If it's a playlist, we only take the first entry
+                if 'entries' in info:
+                    info = info['entries'][0]
                 title = info.get('title', 'Unknown')
         else:
             with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
