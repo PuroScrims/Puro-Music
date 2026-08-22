@@ -7,7 +7,7 @@ import tempfile
 from flask import Flask
 import threading
 
-# ---------- Keep‑alive web server ----------
+# ---------- Keep-alive ----------
 app = Flask(__name__)
 @app.route('/')
 def ping():
@@ -27,25 +27,26 @@ if COOKIES_CONTENT:
     cookies_file.write(COOKIES_CONTENT)
     cookies_file.flush()
     cookies_file.close()
-    print("✅ Cookies loaded from environment.")
+    print("✅ Cookies loaded.")
 else:
-    print("⚠️ COOKIES_CONTENT not set – YouTube may block requests.")
+    print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL OPTIONS (no JavaScript needed with ios) ----------
+# ---------- YDL options ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio[ext=webm]/bestaudio',
-    'quiet': True,
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['ios'],          # ios client works without signature solving
-            'skip': ['webpage', 'dash'],
-        }
-    }
+    'format': 'bestaudio',
+    'quiet': False,             # set to True later, but False for debugging
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'extract_flat': False,
 }
 if cookies_file:
     YDL_OPTIONS['cookiefile'] = cookies_file.name
 
-FFMPEG_OPTIONS = {'before_options': '-reconnect 1', 'options': '-vn'}
+FFMPEG_OPTIONS = {
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn'
+}
 
 queues = {}
 
@@ -65,18 +66,20 @@ async def play_next(guild_id):
     try:
         with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
             info = ydl.extract_info(track.url, download=False)
+            if 'url' not in info:
+                raise Exception("No direct URL found")
             url = info['url']
     except Exception as e:
-        await voice_client.channel.send(f"Error loading track: {e}")
+        await voice_client.channel.send(f"❌ Error: {str(e)[:200]}")
         await play_next(guild_id)
         return
     source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
     voice_client.play(source, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(guild_id), bot.loop))
-    await voice_client.channel.send(f"Now playing: **{track.title}**")
+    await voice_client.channel.send(f"🎵 Now playing: **{track.title}**")
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user}')
+    print(f'✅ Logged in as {bot.user}')
 
 @bot.command(name='p')
 async def play(ctx, *, query=None):
@@ -90,31 +93,40 @@ async def play(ctx, *, query=None):
     if not voice_client:
         await ctx.author.voice.channel.connect()
         voice_client = ctx.voice_client
-    if query.startswith(('http://', 'https://')):
-        url = query
-        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-            info = ydl.extract_info(url, download=False)
-            title = info.get('title', 'Unknown')
-    else:
-        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-            info = ydl.extract_info(f"ytsearch:{query}", download=False)
-            info = info['entries'][0]
-            title = info['title']
-            url = info['webpage_url']
+
+    try:
+        if query.startswith(('http://', 'https://')):
+            url = query
+            with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+                info = ydl.extract_info(url, download=False)
+                title = info.get('title', 'Unknown')
+        else:
+            with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+                info = ydl.extract_info(f"ytsearch:{query}", download=False)
+                if not info or 'entries' not in info or not info['entries']:
+                    raise Exception("No results found")
+                entry = info['entries'][0]
+                title = entry['title']
+                url = entry['webpage_url']
+    except Exception as e:
+        await ctx.send(f"❌ Search error: {str(e)[:200]}")
+        return
+
     track = Track(title, url, ctx.author)
     if ctx.guild.id not in queues:
         queues[ctx.guild.id] = []
     queues[ctx.guild.id].append(track)
+
     if not voice_client.is_playing():
         await play_next(ctx.guild.id)
     else:
-        await ctx.send(f"Added to queue: {title}")
+        await ctx.send(f"➕ Added to queue: **{title}**")
 
 @bot.command(name='skip')
 async def skip(ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.stop()
-        await ctx.send("Skipped")
+        await ctx.send("⏭ Skipped")
     else:
         await ctx.send("Nothing playing")
 
@@ -123,19 +135,18 @@ async def stop(ctx):
     if ctx.voice_client:
         ctx.voice_client.stop()
         queues[ctx.guild.id] = []
-        await ctx.send("Stopped & cleared")
+        await ctx.send("⏹ Stopped and cleared")
 
 @bot.command(name='leave')
 async def leave(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
         queues[ctx.guild.id] = []
-        await ctx.send("Left")
+        await ctx.send("👋 Left")
 
-# ---------- READ TOKEN ----------
+# ---------- Token ----------
 TOKEN = os.getenv('DISCORD_TOKEN')
-if TOKEN is None:
-    print("ERROR: DISCORD_TOKEN not set in environment variables!")
+if not TOKEN:
+    print("ERROR: DISCORD_TOKEN not set")
     exit(1)
-
 bot.run(TOKEN)
