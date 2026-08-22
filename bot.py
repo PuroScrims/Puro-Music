@@ -37,10 +37,10 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options (permissive format) ----------
+# ---------- YDL options (debug on, permissive format) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio',                # let yt-dlp decide the container
-    'quiet': True,
+    'format': 'bestaudio/best',           # pick the best audio, any container
+    'quiet': False,                       # show yt-dlp output for debugging
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'extract_flat': False,
@@ -51,6 +51,7 @@ YDL_OPTIONS = {
             'skip': ['dash', 'webpage'],
         }
     },
+    # Remove any compat options that might interfere
 }
 if cookies_file:
     YDL_OPTIONS['cookiefile'] = cookies_file.name
@@ -90,7 +91,6 @@ async def play_next(guild_id):
         if 'url' in info:
             url = info['url']
         elif 'formats' in info and len(info['formats']) > 0:
-            # pick the format with the highest audio bitrate
             best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
             url = best['url']
         else:
