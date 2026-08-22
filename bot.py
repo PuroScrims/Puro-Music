@@ -6,10 +6,6 @@ import os
 import tempfile
 from flask import Flask
 import threading
-import logging
-
-# Enable detailed yt-dlp logging
-yt_dlp.utils.logging.getLogger().setLevel(logging.DEBUG)
 
 # ---------- Keep-alive ----------
 app = Flask(__name__)
@@ -35,15 +31,14 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options with debugging ----------
+# ---------- YDL options (with fallback formats) ----------
 YDL_OPTIONS = {
-    'format': 'bestaudio',          # simplest
-    'quiet': False,                 # show everything
+    'format': 'bestaudio[ext=webm]/bestaudio',
+    'quiet': False,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': True,
     'extract_flat': False,
-    'verbose': True,                # extra details
 }
 if cookies_file:
     YDL_OPTIONS['cookiefile'] = cookies_file.name
@@ -71,16 +66,14 @@ async def play_next(guild_id):
     try:
         with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
             info = ydl.extract_info(track.url, download=False)
-            if 'url' not in info:
-                # Sometimes the URL is in 'formats' - pick first best
-                if 'formats' in info and len(info['formats']) > 0:
-                    # pick the one with best audio bitrate
-                    best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
-                    url = best['url']
-                else:
-                    raise Exception("No direct URL or formats found")
-            else:
+            if 'url' in info:
                 url = info['url']
+            elif 'formats' in info and len(info['formats']) > 0:
+                # pick best audio format
+                best = max(info['formats'], key=lambda f: f.get('abr', 0) or 0)
+                url = best['url']
+            else:
+                raise Exception("No playable URL found")
     except Exception as e:
         await voice_client.channel.send(f"❌ Playback error: {str(e)[:300]}")
         await play_next(guild_id)
