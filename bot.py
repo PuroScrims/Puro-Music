@@ -19,7 +19,18 @@ threading.Thread(target=run, daemon=True).start()
 # ---------- Bot ----------
 bot = commands.Bot(command_prefix='m!', intents=discord.Intents.all())
 
-YDL_OPTIONS = {'format': 'bestaudio/best', 'quiet': True}
+# ---------- FIXED YDL OPTIONS (bypass YouTube bot block) ----------
+YDL_OPTIONS = {
+    'format': 'bestaudio/best',
+    'quiet': True,
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android', 'web'],
+            'skip': ['webpage', 'dash'],
+        }
+    }
+}
+
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1', 'options': '-vn'}
 
 queues = {}
@@ -41,8 +52,8 @@ async def play_next(guild_id):
         with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
             info = ydl.extract_info(track.url, download=False)
             url = info['url']
-    except:
-        await voice_client.channel.send("Error loading track")
+    except Exception as e:
+        await voice_client.channel.send(f"Error loading track: {e}")
         await play_next(guild_id)
         return
     source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
@@ -107,7 +118,7 @@ async def leave(ctx):
         queues[ctx.guild.id] = []
         await ctx.send("Left")
 
-# ---------- THIS READS THE TOKEN FROM RENDER'S SECRET SETTINGS ----------
+# ---------- READ TOKEN FROM RENDER ENVIRONMENT ----------
 TOKEN = os.getenv('DISCORD_TOKEN')
 if TOKEN is None:
     print("ERROR: DISCORD_TOKEN not set in environment variables!")
