@@ -6,6 +6,7 @@ import os
 import tempfile
 from flask import Flask
 import threading
+import time
 import re
 
 # ---------- Keep-alive web server ----------
@@ -13,9 +14,14 @@ app = Flask(__name__)
 @app.route('/')
 def ping():
     return "I'm alive", 200
-def run():
-    app.run(host='0.0.0.0', port=8080)
-threading.Thread(target=run, daemon=True).start()
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080, debug=False, use_reloader=False)
+
+# Start Flask in a non-daemon thread and give it time to bind
+flask_thread = threading.Thread(target=run_flask, daemon=False)
+flask_thread.start()
+time.sleep(2)  # ensure the port is open
 
 # ---------- Bot ----------
 bot = commands.Bot(command_prefix='m!', intents=discord.Intents.all())
@@ -32,7 +38,7 @@ if COOKIES_CONTENT:
 else:
     print("⚠️ No cookies – may be blocked.")
 
-# ---------- YDL options (with Deno support) ----------
+# ---------- YDL options ----------
 YDL_OPTIONS = {
     'format': 'bestaudio/best',
     'quiet': False,
@@ -47,7 +53,6 @@ YDL_OPTIONS = {
             'skip': ['dash', 'webpage'],
         }
     },
-    # Tell yt-dlp to use Deno (it's enabled by default, but this ensures it)
     'compat_opts': ['allow-unsafe-extractors'],
 }
 if cookies_file:
